@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeuralPhonics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+/* ── RESET & BASE ─────────────────────────────────────── */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+:root {
+  --bg:        #04040e;
+  --surface:   rgba(255,255,255,0.04);
+  --border:    rgba(255,255,255,0.08);
+  --border-hi: rgba(255,255,255,0.16);
+  --text:      rgba(255,255,255,0.92);
+  --muted:     rgba(255,255,255,0.45);
+  --ai:        #7ee8fa;
+  --user:      #d8b4fe;
+  --ok:        #86efac;
+  --warn:      #fde68a;
+  --err:       #fca5a5;
+  --radius:    20px;
+  --radius-sm: 12px;
+}
+html, body {
+  width:100%; height:100%; overflow:hidden;
+  background:var(--bg);
+  font-family:'DM Sans', sans-serif;
+  color:var(--text);
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ── CANVAS BACKGROUND ───────────────────────────────── */
+#bg-canvas {
+  position:fixed; inset:0; z-index:0;
+  pointer-events:none;
+}
+
+/* ── SCREENS ─────────────────────────────────────────── */
+.screen {
+  position:fixed; inset:0; z-index:10;
+  display:flex; align-items:center; justify-content:center;
+  padding:24px;
+  transition: opacity .4s ease, transform .4s ease;
+}
+.screen.out {
+  opacity:0; pointer-events:none; transform:translateY(12px);
+}
+
+/* ── ONBOARDING ──────────────────────────────────────── */
+#screen-onboard { flex-direction:column; gap:0; }
+
+.card {
+  width:100%; max-width:480px;
+  background:rgba(4,4,18,0.82);
+  border:1px solid var(--border);
+  border-top:1px solid var(--border-hi);
+  border-radius:var(--radius);
+  padding:40px 36px 36px;
+  backdrop-filter:blur(28px);
+  -webkit-backdrop-filter:blur(28px);
+}
+
+.brand {
+  display:flex; align-items:center; gap:10px;
+  margin-bottom:28px;
+}
+.brand-dot {
+  width:10px; height:10px; border-radius:50%;
+  background:var(--ai);
+  box-shadow:0 0 10px var(--ai);
+  animation:breathe 2.4s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,100%{ box-shadow:0 0 6px var(--ai); }
+  50%{ box-shadow:0 0 18px var(--ai); }
+}
+.brand-name {
+  font-family:'Syne', sans-serif;
+  font-size:15px; font-weight:700;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color:var(--ai);
+}
+
+h1 {
+  font-family:'Syne', sans-serif;
+  font-size:clamp(28px,6vw,38px);
+  font-weight:800;
+  line-height:1.08;
+  letter-spacing:-0.03em;
+  color:#fff;
+  margin-bottom:10px;
+}
+.sub {
+  font-size:14px; line-height:1.65;
+  color:var(--muted); font-weight:300;
+  margin-bottom:32px;
+}
+
+/* FIELD */
+.field { margin-bottom:22px; }
+.field-label {
+  font-size:10px; font-weight:500;
+  text-transform:uppercase; letter-spacing:2px;
+  color:var(--muted); margin-bottom:10px;
+  display:block;
+}
+
+/* CHIPS */
+.chips {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.chip {
+  padding:12px 14px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:transparent;
+  color:var(--muted);
+  font-family:'DM Sans', sans-serif;
+  font-size:13px; font-weight:400;
+  cursor:pointer; text-align:left;
+  transition:border-color .2s, color .2s, background .2s;
+  line-height:1.35;
+}
+.chip:hover {
+  border-color:rgba(255,255,255,0.18);
+  color:var(--text);
+  background:rgba(255,255,255,0.04);
+}
+.chip.active {
+  border-color:var(--ai);
+  background:rgba(126,232,250,0.08);
+  color:#fff;
+}
+.chip strong {
+  display:block;
+  font-weight:500;
+  font-size:14px;
+  color:inherit;
+  margin-bottom:1px;
+}
+.chip span {
+  font-size:11px;
+  color:var(--muted);
+}
+.chip.active span { color:rgba(126,232,250,0.7); }
+
+/* SELECT */
+select {
+  width:100%; padding:11px 14px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background:rgba(255,255,255,0.03);
+  color:var(--text);
+  font-family:'DM Sans', sans-serif;
+  font-size:14px; outline:none; cursor:pointer;
+  -webkit-appearance:none; appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 14px center;
+  transition:border-color .2s;
+}
+select:focus { border-color:var(--ai); }
+select option { background:#0d0d20; }
+
+/* START BUTTON */
+#btn-start {
+  width:100%; margin-top:28px;
+  padding:15px;
+  border-radius:var(--radius-sm);
+  border:1px solid rgba(126,232,250,0.35);
+  background:rgba(126,232,250,0.1);
+  color:#fff;
+  font-family:'Syne', sans-serif;
+  font-size:14px; font-weight:700;
+  letter-spacing:0.08em; text-transform:uppercase;
+  cursor:pointer;
+  transition:background .25s, border-color .25s, transform .2s, opacity .2s;
+}
+#btn-start:hover:not(:disabled) {
+  background:rgba(126,232,250,0.18);
+  border-color:rgba(126,232,250,0.6);
+  transform:translateY(-2px);
+}
+#btn-start:disabled {
+  opacity:0.35; cursor:not-allowed; transform:none;
+}
+
+/* ── LESSON SCREEN ───────────────────────────────────── */
+#screen-lesson {
+  flex-direction:column;
+  gap:12px;
+  justify-content:center;
+  align-items:center;
+}
+
+/* TOP BAR */
+.top-bar {
+  width:100%; max-width:600px;
+  display:flex; align-items:center; justify-content:space-between;
+  background:rgba(4,4,18,0.75);
+  border:1px solid var(--border);
+  border-radius:50px;
+  padding:10px 16px 10px 20px;
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+}
+.top-meta {
+  font-size:12px; color:var(--muted);
+  display:flex; align-items:center; gap:8px;
+}
+.top-meta strong { color:var(--text); font-weight:500; }
+.top-sep {
+  width:1px; height:12px;
+  background:var(--border); display:inline-block;
+}
+.score-pills {
+  display:flex; gap:6px; align-items:center;
+}
+.pill {
+  padding:4px 12px; border-radius:50px;
+  font-size:12px; font-weight:500;
+  border:1px solid var(--border);
+  background:var(--surface);
+}
+.pill.green { border-color:rgba(134,239,172,0.3); color:var(--ok); }
+.pill.muted { color:var(--muted); }
+
+/* MAIN CARD */
+.lesson-card {
+  width:100%; max-width:600px;
+  background:rgba(4,4,18,0.82);
+  border:1px solid var(--border);
+  border-top:1px solid var(--border-hi);
+  border-radius:var(--radius);
+  padding:32px 32px 28px;
+  backdrop-filter:blur(28px);
+  -webkit-backdrop-filter:blur(28px);
+}
+
+/* TUTOR ROW */
+.tutor-row {
+  display:flex; gap:14px; align-items:flex-start;
+  margin-bottom:24px;
+}
+.avatar {
+  width:38px; height:38px; flex-shrink:0;
+  border-radius:10px;
+  background:rgba(126,232,250,0.1);
+  border:1px solid rgba(126,232,250,0.2);
+  display:flex; align-items:center; justify-content:center;
+  font-size:17px;
+  position:relative;
+}
+.avatar-ring {
+  position:absolute; inset:-3px; border-radius:13px;
+  border:1px solid rgba(126,232,250,0.5);
+  opacity:0;
+  transition:opacity .3s;
+}
+.avatar-ring.active {
+  opacity:1;
+  animation:ring-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ring-pulse {
+  0%,100%{ transform:scale(1); opacity:0.5; }
+  50%{ transform:scale(1.08); opacity:1; }
+}
+.tutor-label {
+  font-size:10px; font-weight:500;
+  text-transform:uppercase; letter-spacing:2px;
+  color:var(--ai); margin-bottom:5px;
+}
+#tutor-msg {
+  font-size:15px; line-height:1.65;
+  color:var(--text); font-weight:300;
+  min-height:44px;
+}
+#tutor-msg .hl {
+  font-family:'Syne', sans-serif;
+  font-weight:700; font-size:18px;
+  color:var(--ai);
+}
+
+/* DIVIDER */
+hr {
+  border:none; border-top:1px solid var(--border);
+  margin:0 0 24px;
+}
+
+/* WORD DISPLAY */
+.word-display {
+  text-align:center;
+  padding:8px 0 24px;
+}
+#word-big {
+  font-family:'Syne', sans-serif;
+  font-size:clamp(52px,12vw,88px);
+  font-weight:800;
+  letter-spacing:-0.03em;
+  color:#fff;
+  line-height:1;
+  margin-bottom:8px;
+  text-shadow:0 0 40px rgba(126,232,250,0.25);
+}
+#word-ipa {
+  font-size:20px; color:var(--muted);
+  font-weight:300; font-style:italic;
+  margin-bottom:6px;
+}
+#word-hint {
+  font-size:13px; color:var(--muted);
+  font-weight:300; line-height:1.5;
+}
+
+/* FEEDBACK */
+#feedback {
+  border-radius:var(--radius-sm);
+  padding:12px 16px;
+  font-size:14px; line-height:1.55;
+  margin-bottom:20px;
+  display:none;
+}
+#feedback.show { display:block; }
+#feedback.ok  { background:rgba(134,239,172,0.08); border:1px solid rgba(134,239,172,0.2); color:var(--ok); }
+#feedback.mid { background:rgba(253,230,138,0.08); border:1px solid rgba(253,230,138,0.2); color:var(--warn); }
+#feedback.bad { background:rgba(252,165,165,0.08); border:1px solid rgba(252,165,165,0.2); color:var(--err); }
+
+/* CONTROLS */
+.controls {
+  display:flex; gap:8px; align-items:center;
+  flex-wrap:wrap;
+}
+.btn {
+  display:inline-flex; align-items:center; gap:7px;
+  padding:10px 18px;
+  border-radius:50px;
+  border:1px solid var(--border);
+  background:var(--surface);
+  color:var(--text);
+  font-family:'DM Sans', sans-serif;
+  font-size:13px; font-weight:400;
+  cursor:pointer;
+  transition:background .2s, border-color .2s, transform .15s;
+  white-space:nowrap;
+}
+.btn:hover {
+  background:rgba(255,255,255,0.08);
+  border-color:rgba(255,255,255,0.2);
+  transform:translateY(-1px);
+}
+.btn:active { transform:translateY(0); }
+.btn.primary {
+  border-color:rgba(126,232,250,0.35);
+  color:var(--ai);
+  background:rgba(126,232,250,0.07);
+}
+.btn.primary:hover { background:rgba(126,232,250,0.14); }
+.btn.recording {
+  border-color:rgba(216,180,254,0.45);
+  color:var(--user);
+  background:rgba(216,180,254,0.08);
+  animation:rec-glow 1.2s ease-in-out infinite;
+}
+@keyframes rec-glow {
+  0%,100%{ box-shadow:0 0 0 0 rgba(216,180,254,0.2); }
+  50%{ box-shadow:0 0 0 6px rgba(216,180,254,0); }
+}
+.btn-icon { font-size:15px; line-height:1; }
+.rec-dot {
+  width:7px; height:7px; border-radius:50%;
+  background:var(--user);
+  animation:blink .9s ease infinite;
+}
+@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:.2;} }
+#btn-next { margin-left:auto; }
+
+/* PROGRESS */
+.progress-row {
+  display:flex; align-items:center; gap:10px;
+  margin-top:20px;
+}
+.progress-track {
+  flex:1; height:3px;
+  background:rgba(255,255,255,0.06);
+  border-radius:3px; overflow:hidden;
+}
+.progress-fill {
+  height:100%; border-radius:3px;
+  background:linear-gradient(90deg, var(--ai), var(--user));
+  transition:width .5s ease;
+  width:0%;
+}
+#progress-label {
+  font-size:11px; color:var(--muted);
+  white-space:nowrap; min-width:42px; text-align:right;
+}
+
+/* TIP */
+.tip {
+  width:100%; max-width:600px;
+  font-size:12px; color:var(--muted);
+  text-align:center; padding:2px 0;
+  letter-spacing:0.01em;
+}
+
+/* BACK */
+#btn-back {
+  position:fixed; top:20px; left:20px; z-index:20;
+  padding:8px 16px; border-radius:50px;
+  border:1px solid var(--border);
+  background:rgba(4,4,18,0.7);
+  color:var(--muted);
+  font-family:'DM Sans', sans-serif; font-size:12px;
+  cursor:pointer; backdrop-filter:blur(16px);
+  transition:color .2s, border-color .2s;
+  display:none;
+}
+#btn-back:hover { color:var(--text); border-color:rgba(255,255,255,0.2); }
+
+/* DOTS ANIMATION */
+.dots span {
+  display:inline-block;
+  width:5px; height:5px; border-radius:50%;
+  background:var(--ai);
+  margin:0 2px;
+  animation:dot .8s ease-in-out infinite;
+}
+.dots span:nth-child(2){ animation-delay:.15s; }
+.dots span:nth-child(3){ animation-delay:.3s; }
+@keyframes dot{ 0%,80%,100%{opacity:.3;transform:scale(.7);} 40%{opacity:1;transform:scale(1);} }
+
+/* COMPLETE */
+.complete-badge {
+  display:inline-block;
+  padding:6px 16px; border-radius:50px;
+  background:rgba(134,239,172,0.1);
+  border:1px solid rgba(134,239,172,0.25);
+  color:var(--ok);
+  font-size:12px; font-weight:500;
+  margin-top:16px;
+}
+
+/* RESPONSIVE */
+@media(max-width:540px){
+  .card, .lesson-card { padding:24px 20px 20px; }
+  .top-bar { padding:8px 12px 8px 16px; border-radius:16px; }
+  #word-big { font-size:52px; }
+  .btn { padding:10px 14px; font-size:12px; }
+  #btn-next { margin-left:0; }
+}
+</style>
+</head>
+<body>
+
+<!-- Background canvas (Three.js) -->
+<canvas id="bg-canvas"></canvas>
+
+<!-- Back button (shown during lesson) -->
+<button id="btn-back">← Back</button>
+
+<!-- ── ONBOARDING ──────────────────────────────────────── -->
+<div class="screen" id="screen-onboard">
+  <div class="card">
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <div class="brand-name">NeuralPhonics</div>
+    </div>
+
+    <h1>Speak with confidence.</h1>
+    <p class="sub">Choose your learning framework and level. Your AI pronunciation tutor will guide you through every session.</p>
+
+    <div class="field">
+      <label class="field-label">Learning Framework</label>
+      <div class="chips" id="chips-framework">
+        <button class="chip" data-fw="ielts">
+          <strong>IELTS</strong>
+          <span>Academic English</span>
+        </button>
+        <button class="chip" data-fw="cambridge">
+          <strong>Cambridge</strong>
+          <span>British RP</span>
+        </button>
+        <button class="chip" data-fw="tesol">
+          <strong>TESOL</strong>
+          <span>ESL Clarity</span>
+        </button>
+        <button class="chip" data-fw="business">
+          <strong>Business</strong>
+          <span>Professional Tone</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="sel-level">CEFR Level</label>
+      <select id="sel-level">
+        <option value="">— Select your level —</option>
+        <option value="A1">A1 — Beginner</option>
+        <option value="A2">A2 — Elementary</option>
+        <option value="B1">B1 — Intermediate</option>
+        <option value="B2">B2 — Upper Intermediate</option>
+        <option value="C1">C1 — Advanced</option>
+        <option value="C2">C2 — Mastery</option>
+      </select>
+    </div>
+
+    <button id="btn-start" disabled>Begin Session</button>
+  </div>
+</div>
+
+<!-- ── LESSON ─────────────────────────────────────────── -->
+<div class="screen out" id="screen-lesson">
+
+  <div class="top-bar">
+    <div class="top-meta">
+      <strong id="meta-fw">IELTS</strong>
+      <div class="top-sep"></div>
+      <span id="meta-level">A1</span>
+    </div>
+    <div class="score-pills">
+      <div class="pill green" id="pill-correct">0 correct</div>
+      <div class="pill muted" id="pill-attempts">0 attempts</div>
+    </div>
+  </div>
+
+  <div class="lesson-card">
+
+    <!-- Tutor -->
+    <div class="tutor-row">
+      <div class="avatar">
+        🤖
+        <div class="avatar-ring" id="avatar-ring"></div>
+      </div>
+      <div style="flex:1">
+        <div class="tutor-label">Tutor</div>
+        <div id="tutor-msg">
+          <span class="dots"><span></span><span></span><span></span></span>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Word -->
+    <div class="word-display" id="word-section">
+      <div id="word-big">—</div>
+      <div id="word-ipa"></div>
+      <div id="word-hint"></div>
+    </div>
+
+    <!-- Feedback -->
+    <div id="feedback"></div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button class="btn primary" id="btn-listen">
+        <span class="btn-icon">🔊</span> Hear it
+      </button>
+      <button class="btn" id="btn-speak">
+        <span class="btn-icon">🎙️</span> Speak
+      </button>
+      <button class="btn" id="btn-next">
+        Next →
+      </button>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-row">
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div id="progress-label">0 / 0</div>
+    </div>
+
+  </div>
+
+  <div class="tip" id="tip-text">
+    Use Chrome or Edge for full voice support · Click anywhere on the network to pulse it
+  </div>
+
+</div>
+
+<!-- ── THREE.JS (CDN) ─────────────────────────────────── -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ── SCENE ─────────────────────────────────────────────── */
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000000, 0.002);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 800);
+camera.position.set(0, 5, 28);
+
+const canvas = document.getElementById('bg-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+/* ── POST ───────────────────────────────────────────────── */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.5, 0.5, 0.75);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ── CONTROLS ───────────────────────────────────────────── */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.2;
+controls.enablePan = false;
+controls.minDistance = 8;
+controls.maxDistance = 60;
+
+/* ── PALETTES ───────────────────────────────────────────── */
+const PALETTES = {
+  ielts:    [0x7ee8fa, 0x4facfe, 0x80d0c7, 0x43e97b, 0x38f9d7],
+  cambridge:[0xe0c3fc, 0x8ec5fc, 0xc3cfe2, 0xa18cd1, 0xfbc2eb],
+  tesol:    [0x7ee8fa, 0x43e97b, 0x38f9d7, 0x4facfe, 0x80d0c7],
+  business: [0xfda085, 0xf6d365, 0xffecd2, 0xfcb69f, 0xff9a9e]
+};
+let activePalette = PALETTES.ielts.map(h => new THREE.Color(h));
+
+/* ── NOISE GLSL ─────────────────────────────────────────── */
+const NOISE_GLSL = `
+vec3 mod289v3(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec4 mod289v4(vec4 x){return x-floor(x*(1./289.))*289.;}
+vec4 permute4(vec4 x){return mod289v4(((x*34.)+1.)*x);}
+vec4 taylorInvSqrt4(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1./6.,1./3.);const vec4 D=vec4(0.,.5,1.,2.);
+  vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.-g;
+  vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+C.yyy;vec3 x3=x0-D.yyy;
+  i=mod289v3(i);
+  vec4 p=permute4(permute4(permute4(
+    i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+  float n_=0.142857142857;vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.*floor(p*ns.z*ns.z);
+  vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.*x_);
+  vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;vec4 h=1.-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.+1.;vec4 s1=floor(b1)*2.+1.;vec4 sh=-step(h,vec4(0.));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);
+  vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt4(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);m=m*m;
+  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+
+/* ── PULSE STATE ────────────────────────────────────────── */
+const MAX_PULSES = 4;
+const pulseUniforms = {
+  uTime:       { value: 0 },
+  uPulsePos:   { value: Array.from({length:MAX_PULSES}, () => new THREE.Vector3(9e3,9e3,9e3)) },
+  uPulseTime:  { value: new Array(MAX_PULSES).fill(-9e3) },
+  uPulseColor: { value: Array.from({length:MAX_PULSES}, () => new THREE.Color(1,1,1)) },
+  uPulseSpeed: { value: 14.0 }
+};
+let pulseIdx = 0;
+
+function firePulse(pos, color) {
+  pulseIdx = (pulseIdx + 1) % MAX_PULSES;
+  const t = clock.getElapsedTime();
+  if (nodeMesh) {
+    nodeMesh.material.uniforms.uPulsePos.value[pulseIdx].copy(pos);
+    nodeMesh.material.uniforms.uPulseTime.value[pulseIdx] = t;
+    nodeMesh.material.uniforms.uPulseColor.value[pulseIdx].copy(color);
+  }
+  if (edgeMesh) {
+    edgeMesh.material.uniforms.uPulsePos.value[pulseIdx].copy(pos);
+    edgeMesh.material.uniforms.uPulseTime.value[pulseIdx] = t;
+    edgeMesh.material.uniforms.uPulseColor.value[pulseIdx].copy(color);
+  }
+}
+
+/* expose for UI layer */
+window.NP_firePulse = firePulse;
+window.NP_fireCenter = function(hexColor) {
+  firePulse(new THREE.Vector3(0,0,0), new THREE.Color(hexColor));
+};
+
+/* ── PULSE GLSL HELPER ──────────────────────────────────── */
+function pulseGLSL(n) {
+  return `
+float getPulse(vec3 wp) {
+  float total = 0.0;
+  for (int i = 0; i < ${n}; i++) {
+    float pt = uPulseTime[i];
+    if (pt < -100.0) continue;
+    float age = uTime - pt;
+    if (age < 0.0 || age > 3.5) continue;
+    float radius = age * uPulseSpeed;
+    float d = distance(wp, uPulsePos[i]);
+    total += smoothstep(2.5, 0.0, abs(d - radius)) * smoothstep(3.5, 0.0, age);
+  }
+  return min(total, 1.0);
+}`;
+}
+
+/* ── NODE SHADER ────────────────────────────────────────── */
+const nodeVert = `
+${NOISE_GLSL}
+attribute float aSize;
+attribute vec3  aColor;
+attribute float aDist;
+uniform float uTime;
+uniform vec3  uPulsePos[${MAX_PULSES}];
+uniform float uPulseTime[${MAX_PULSES}];
+uniform vec3  uPulseColor[${MAX_PULSES}];
+uniform float uPulseSpeed;
+varying vec3  vColor;
+varying float vPulse;
+varying float vDist;
+${pulseGLSL(MAX_PULSES)}
+void main(){
+  vColor = aColor; vDist = aDist;
+  vec3 wp = (modelMatrix * vec4(position,1.0)).xyz;
+  vPulse = getPulse(wp);
+  float breathe = sin(uTime * 0.6 + aDist * 0.12) * 0.12 + 0.88;
+  float sz = aSize * breathe * (1.0 + vPulse * 2.2);
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = sz * (880.0 / -mv.z);
+  gl_Position  = projectionMatrix * mv;
+}`;
+
+const nodeFrag = `
+uniform float uTime;
+uniform vec3  uPulseColor[${MAX_PULSES}];
+varying vec3  vColor;
+varying float vPulse;
+varying float vDist;
+void main(){
+  vec2 c = 2.0 * gl_PointCoord - 1.0;
+  float d = length(c);
+  if (d > 1.0) discard;
+  float g = pow(1.0 - smoothstep(0.0, 0.5, d), 1.3)
+          + (1.0 - smoothstep(0.0, 1.0, d)) * 0.25;
+  vec3 col = vColor * (0.88 + 0.12 * sin(uTime * 0.5 + vDist * 0.2));
+  if (vPulse > 0.0) {
+    col = mix(col, vec3(1.0), vPulse * 0.7);
+    g  *= (1.0 + vPulse * 0.9);
+  }
+  col += vec3(1.0) * smoothstep(0.35, 0.0, d) * 0.25;
+  gl_FragColor = vec4(col, g * 0.92);
+}`;
+
+/* ── EDGE SHADER ────────────────────────────────────────── */
+const edgeVert = `
+${NOISE_GLSL}
+attribute vec3  aStart;
+attribute vec3  aEnd;
+attribute vec3  aColor;
+attribute float aStr;
+attribute float aIdx;
+uniform float uTime;
+uniform vec3  uPulsePos[${MAX_PULSES}];
+uniform float uPulseTime[${MAX_PULSES}];
+uniform vec3  uPulseColor[${MAX_PULSES}];
+uniform float uPulseSpeed;
+varying vec3  vColor;
+varying float vStr;
+varying float vPulse;
+varying float vT;
+${pulseGLSL(MAX_PULSES)}
+void main(){
+  float t = position.x; vT = t;
+  vec3 mid = mix(aStart, aEnd, 0.5);
+  vec3 perp = normalize(cross(normalize(aEnd - aStart), vec3(0,1,0)));
+  if (length(perp) < 0.1) perp = vec3(1,0,0);
+  mid += perp * sin(t * 3.14159) * 0.12;
+  vec3 p0 = mix(aStart, mid, t);
+  vec3 p1 = mix(mid,   aEnd, t);
+  vec3 fp  = mix(p0, p1, t);
+  fp += perp * snoise(vec3(aIdx * 0.07, t * 0.5, uTime * 0.12)) * 0.1;
+  vec3 wp = (modelMatrix * vec4(fp, 1.0)).xyz;
+  vPulse = getPulse(wp);
+  vColor = aColor; vStr = aStr;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(fp, 1.0);
+}`;
+
+const edgeFrag = `
+uniform float uTime;
+varying vec3  vColor;
+varying float vStr;
+varying float vPulse;
+varying float vT;
+void main(){
+  float flow = sin(vT * 20.0 - uTime * 3.5) * 0.5 + 0.5;
+  vec3 col = vColor * (0.75 + 0.25 * flow);
+  float a = (0.55 * vStr + flow * 0.22);
+  if (vPulse > 0.0) {
+    col = mix(col, vec3(1.0), vPulse * 0.65);
+    a   = mix(a, min(1.0, a * 2.2), vPulse);
+  }
+  gl_FragColor = vec4(col, a);
+}`;
+
+/* ── NETWORK BUILDER ────────────────────────────────────── */
+class NetNode {
+  constructor(p, lv, tp) {
+    this.p  = p;  this.lv = lv; this.tp = tp;
+    this.sz = tp === 0 ? THREE.MathUtils.randFloat(0.7,1.3) : THREE.MathUtils.randFloat(0.4,0.9);
+    this.dist = 0;
+    this.edges = [];
+  }
+  link(n, s=1) {
+    if (!this.edges.some(e => e.n === n)) {
+      this.edges.push({n,s}); n.edges.push({n:this,s});
+    }
+  }
+}
+
+function buildNet(type) {
+  let nodes = [], root;
+  const GR = (1 + Math.sqrt(5)) / 2;
+
+  if (type === 0) { /* sphere */
+    root = new NetNode(new THREE.Vector3(0,0,0), 0, 0); root.sz = 1.8; nodes.push(root);
+    for (let l = 1; l <= 5; l++) {
+      const R = l * 4, N = l * 9;
+      for (let i = 0; i < N; i++) {
+        const phi = Math.acos(1 - 2*(i+.5)/N), th = 2*Math.PI*i/GR;
+        const nd = new NetNode(new THREE.Vector3(R*Math.sin(phi)*Math.cos(th), R*Math.sin(phi)*Math.sin(th), R*Math.cos(phi)), l, l===5||Math.random()<.25?1:0);
+        nd.dist = R; nodes.push(nd);
+        const prev = nodes.filter(x => x.lv === l-1);
+        prev.sort((a,b) => nd.p.distanceTo(a.p) - nd.p.distanceTo(b.p)).slice(0,2).forEach(p => nd.link(p, Math.max(.3, 1-nd.p.distanceTo(p.p)/(R*2))));
+        if (l===1) root.link(nd, .9);
+      }
+    }
+  } else if (type === 1) { /* helix */
+    root = new NetNode(new THREE.Vector3(0,0,0), 0, 0); root.sz = 1.6; nodes.push(root);
+    const HA = [];
+    for (let h = 0; h < 3; h++) {
+      const ph = (h/3)*Math.PI*2, hn = [], NP = 36;
+      for (let i = 0; i < NP; i++) {
+        const t=i/(NP-1), y=(t-.5)*26, rs=Math.sin(t*Math.PI)*.65+.35, r=10*rs, a=ph+t*Math.PI*5;
+        const nd = new NetNode(new THREE.Vector3(r*Math.cos(a),y,r*Math.sin(a)), Math.ceil(t*5), i>NP-4||Math.random()<.2?1:0);
+        nd.dist = Math.hypot(r, y); nodes.push(nd); hn.push(nd);
+      }
+      HA.push(hn); root.link(hn[0], 1);
+      for (let i=0;i<hn.length-1;i++) hn[i].link(hn[i+1],.8);
+    }
+    for (let h=0;h<3;h++) {
+      const c=HA[h],nx=HA[(h+1)%3];
+      for (let i=0;i<c.length;i+=6) { const ti=Math.round(c[i].dist/(26)*((nx.length-1))); if(ti<nx.length) c[i].link(nx[ti],.6); }
+    }
+  } else { /* fractal */
+    root = new NetNode(new THREE.Vector3(0,0,0), 0, 0); root.sz = 1.5; nodes.push(root);
+    function branch(sn, dir, depth, str, sc) {
+      if (depth > 4) return;
+      const ep = new THREE.Vector3().copy(sn.p).add(dir.clone().multiplyScalar(4.5*sc));
+      const nd = new NetNode(ep, depth, depth===4||Math.random()<.25?1:0);
+      nd.dist = ep.length(); nodes.push(nd); sn.link(nd, str);
+      if (depth < 4) for (let i=0;i<3;i++) {
+        const a=i/3*Math.PI*2, p1=new THREE.Vector3(-dir.y,dir.x,0).normalize(), p2=dir.clone().cross(p1).normalize();
+        branch(nd, new THREE.Vector3().copy(dir).add(p1.clone().multiplyScalar(Math.cos(a)*.65)).add(p2.clone().multiplyScalar(Math.sin(a)*.65)).normalize(), depth+1, str*.72, sc*.78);
+      }
+    }
+    for (let i=0;i<5;i++) {
+      const phi=Math.acos(1-2*(i+.5)/5), th=Math.PI*(1+Math.sqrt(5))*i;
+      branch(root, new THREE.Vector3(Math.sin(phi)*Math.cos(th),Math.sin(phi)*Math.sin(th),Math.cos(phi)).normalize(), 1, .9, 1);
+    }
+  }
+  return { nodes, root };
+}
+
+let nodeMesh = null, edgeMesh = null;
+
+function buildMeshes(type) {
+  [nodeMesh, edgeMesh].forEach(m => { if(m){ scene.remove(m); m.geometry.dispose(); m.material.dispose(); } });
+  const { nodes } = buildNet(type);
+  const pal = activePalette;
+
+  /* nodes */
+  const nPos=[], nSz=[], nCol=[], nDist=[];
+  nodes.forEach(nd => {
+    nPos.push(nd.p.x, nd.p.y, nd.p.z); nSz.push(nd.sz); nDist.push(nd.dist);
+    const c = pal[Math.min(nd.lv, pal.length-1)].clone();
+    c.offsetHSL(THREE.MathUtils.randFloatSpread(.04), THREE.MathUtils.randFloatSpread(.08), THREE.MathUtils.randFloatSpread(.08));
+    nCol.push(c.r, c.g, c.b);
+  });
+  const ng = new THREE.BufferGeometry();
+  ng.setAttribute('position', new THREE.Float32BufferAttribute(nPos, 3));
+  ng.setAttribute('aSize',    new THREE.Float32BufferAttribute(nSz,  1));
+  ng.setAttribute('aColor',   new THREE.Float32BufferAttribute(nCol, 3));
+  ng.setAttribute('aDist',    new THREE.Float32BufferAttribute(nDist,1));
+  nodeMesh = new THREE.Points(ng, new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(pulseUniforms),
+    vertexShader: nodeVert, fragmentShader: nodeFrag,
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending
+  }));
+  scene.add(nodeMesh);
+
+  /* edges */
+  const ePos=[], eSP=[], eEP=[], eCol=[], eStr=[], eIdx=[];
+  const seen = new Set(); let ei = 0;
+  nodes.forEach((nd, ni) => nd.edges.forEach(({n:m, s}) => {
+    const mi = nodes.indexOf(m); if (mi < 0) return;
+    const key = `${Math.min(ni,mi)}-${Math.max(ni,mi)}`; if (seen.has(key)) return; seen.add(key);
+    const SEG = 16;
+    for (let k=0;k<SEG;k++) {
+      const t=k/(SEG-1);
+      ePos.push(t,0,0); eSP.push(nd.p.x,nd.p.y,nd.p.z); eEP.push(m.p.x,m.p.y,m.p.z);
+      eStr.push(s); eIdx.push(ei);
+      const c = pal[Math.min(Math.floor((nd.lv+m.lv)/2), pal.length-1)].clone();
+      c.offsetHSL(THREE.MathUtils.randFloatSpread(.04), THREE.MathUtils.randFloatSpread(.08), THREE.MathUtils.randFloatSpread(.08));
+      eCol.push(c.r,c.g,c.b);
+    }
+    ei++;
+  }));
+  const eg = new THREE.BufferGeometry();
+  eg.setAttribute('position', new THREE.Float32BufferAttribute(ePos,3));
+  eg.setAttribute('aStart',   new THREE.Float32BufferAttribute(eSP, 3));
+  eg.setAttribute('aEnd',     new THREE.Float32BufferAttribute(eEP, 3));
+  eg.setAttribute('aColor',   new THREE.Float32BufferAttribute(eCol,3));
+  eg.setAttribute('aStr',     new THREE.Float32BufferAttribute(eStr,1));
+  eg.setAttribute('aIdx',     new THREE.Float32BufferAttribute(eIdx,1));
+  edgeMesh = new THREE.LineSegments(eg, new THREE.ShaderMaterial({
+    uniforms: THREE.UniformsUtils.clone(pulseUniforms),
+    vertexShader: edgeVert, fragmentShader: edgeFrag,
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending
+  }));
+  scene.add(edgeMesh);
+
+  /* sync palette to pulse color slots */
+  pal.slice(0,MAX_PULSES).forEach((c,i) => {
+    nodeMesh.material.uniforms.uPulseColor.value[i].copy(c);
+    edgeMesh.material.uniforms.uPulseColor.value[i].copy(c);
+  });
+}
+
+/* ── STARS ──────────────────────────────────────────────── */
+(function makeStars(){
+  const N=5000, pos=[], col=[], sz=[];
+  for(let i=0;i<N;i++){
+    const r=THREE.MathUtils.randFloat(55,130), phi=Math.acos(THREE.MathUtils.randFloatSpread(2)), th=Math.random()*Math.PI*2;
+    pos.push(r*Math.sin(phi)*Math.cos(th), r*Math.sin(phi)*Math.sin(th), r*Math.cos(phi));
+    const v=Math.random(); v<.7?col.push(1,1,1):v<.85?col.push(.7,.8,1):col.push(1,.95,.8);
+    sz.push(THREE.MathUtils.randFloat(.06,.22));
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('color',   new THREE.Float32BufferAttribute(col,3));
+  g.setAttribute('size',    new THREE.Float32BufferAttribute(sz,1));
+  const m=new THREE.ShaderMaterial({
+    uniforms:{uT:{value:0}},
+    vertexShader:`attribute float size;attribute vec3 color;varying vec3 vC;uniform float uT;
+    void main(){vC=color;vec4 mv=modelViewMatrix*vec4(position,1.);float tw=sin(uT*1.8+position.x*80.)*.25+.75;
+    gl_PointSize=size*tw*(260./-mv.z);gl_Position=projectionMatrix*mv;}`,
+    fragmentShader:`varying vec3 vC;void main(){vec2 c=gl_PointCoord-.5;if(length(c)>.5)discard;
+    float a=1.-smoothstep(0.,.5,length(c));gl_FragColor=vec4(vC,a*.7);}`,
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending
+  });
+  const stars=new THREE.Points(g,m);
+  scene.add(stars);
+  window._stars=stars;
+})();
+
+/* ── CLICK → PULSE ──────────────────────────────────────── */
+const ray=new THREE.Raycaster(), ptr=new THREE.Vector2(), ipl=new THREE.Plane(), ipt=new THREE.Vector3();
+canvas.addEventListener('pointerdown', e => {
+  ptr.x=(e.clientX/innerWidth)*2-1; ptr.y=-(e.clientY/innerHeight)*2+1;
+  ray.setFromCamera(ptr, camera);
+  ipl.normal.copy(camera.position).normalize();
+  ipl.constant = -ipl.normal.dot(camera.position) + camera.position.length()*.4;
+  if (ray.ray.intersectPlane(ipl, ipt)) {
+    firePulse(ipt.clone(), activePalette[Math.floor(Math.random()*activePalette.length)]);
+  }
+});
+
+/* ── ANIMATE ────────────────────────────────────────────── */
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  if (nodeMesh) { nodeMesh.material.uniforms.uTime.value = t; nodeMesh.rotation.y = Math.sin(t*.035)*.05; }
+  if (edgeMesh) { edgeMesh.material.uniforms.uTime.value = t; edgeMesh.rotation.y = Math.sin(t*.035)*.05; }
+  if (window._stars) { window._stars.rotation.y += .00012; window._stars.material.uniforms.uT.value = t; }
+  controls.update();
+  composer.render();
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
+  bloom.resolution.set(innerWidth, innerHeight);
+});
+
+/* expose for UI */
+window.NP_buildMeshes  = buildMeshes;
+window.NP_setPalette   = (key) => {
+  activePalette = (PALETTES[key] || PALETTES.ielts).map(h => new THREE.Color(h));
+};
+
+buildMeshes(0);
+animate();
+</script>
+
+<!-- ── APP LOGIC ────────────────────────────────────────── -->
+<script>
+/* ── LESSON DATA ────────────────────────────────────────── */
+const LESSONS = {
+  ielts: {
+    A1: [
+      { word:'sit',     ipa:'/sɪt/',         hint:'Short i sound — tongue tip behind upper teeth' },
+      { word:'ship',    ipa:'/ʃɪp/',         hint:'Round lips slightly for the sh sound' },
+      { word:'thin',    ipa:'/θɪn/',         hint:'Voiceless th — tongue lightly between teeth' },
+      { word:'chair',   ipa:'/tʃeər/',       hint:'Affricate — stop the air then release it' },
+      { word:'bird',    ipa:'/bɜːd/',        hint:'Central vowel — relax the tongue fully' }
+    ],
+    B1: [
+      { word:'rhythm',       ipa:'/ˈrɪðəm/',         hint:'Two syllables — stress on first' },
+      { word:'thorough',     ipa:'/ˈθʌrə/',           hint:'Voiced th plus a schwa at the end' },
+      { word:'colonel',      ipa:'/ˈkɜːnəl/',         hint:'Silent letters — sounds like kernel' },
+      { word:'environment',  ipa:'/ɪnˈvaɪərənmənt/',  hint:'5 syllables — stress falls on the 2nd' },
+      { word:'statistics',   ipa:'/stəˈtɪstɪks/',     hint:'Stress on the 2nd syllable' }
+    ],
+    C1: [
+      { word:'particularly',  ipa:'/pəˈtɪkjələli/',    hint:'5 syllables — 2nd syllable stressed' },
+      { word:'extraordinary', ipa:'/ɪkˈstrɔːdənri/',   hint:'British RP reduces to 5 syllables' },
+      { word:'conscientious', ipa:'/ˌkɒnʃiˈenʃəs/',   hint:'Stress on the 3rd syllable' },
+      { word:'phenomenon',    ipa:'/fɪˈnɒmɪnən/',      hint:'Greek origin — 4 syllables' },
+      { word:'bureaucracy',   ipa:'/bjʊˈrɒkrəsi/',     hint:'4 syllables — stress on 2nd' }
+    ]
+  },
+  cambridge: {
+    A1: [
+      { word:'bath',    ipa:'/bɑːθ/',     hint:'Long open a — the classic British RP vowel' },
+      { word:'dance',   ipa:'/dɑːns/',    hint:'Open ah — not the short a of American English' },
+      { word:'water',   ipa:'/ˈwɔːtə/',   hint:'Non-rhotic — do not pronounce the r at the end' },
+      { word:'butter',  ipa:'/ˈbʌtə/',    hint:'Ends with a schwa — relaxed and unstressed' },
+      { word:'little',  ipa:'/ˈlɪtl/',    hint:'Syllabic l at the end — no separate vowel sound' }
+    ],
+    B2: [
+      { word:'literature',   ipa:'/ˈlɪtrətʃə/',   hint:'4 syllables in RP — middle vowel reduced' },
+      { word:'comfortable',  ipa:'/ˈkʌmftəbl/',   hint:'3 syllables in RP — middle e is dropped' },
+      { word:'secretary',    ipa:'/ˈsekrətri/',   hint:'RP uses 4 syllables, American English 5' },
+      { word:'necessary',    ipa:'/ˈnesəsəri/',   hint:'4 syllables — stress on the 1st' },
+      { word:'temperature',  ipa:'/ˈtemprətʃə/',  hint:'3 syllables in RP — middle e dropped' }
+    ]
+  },
+  tesol: {
+    A1: [
+      { word:'the',    ipa:'/ðə/ or /ðiː/', hint:'Voiced th. Say thee before vowel sounds' },
+      { word:'this',   ipa:'/ðɪs/',         hint:'Voiced th — tongue lightly touches teeth' },
+      { word:'three',  ipa:'/θriː/',         hint:'Voiceless th — tongue tip to upper teeth' },
+      { word:'world',  ipa:'/wɜːld/',        hint:'Start with w and use a central vowel sound' },
+      { word:'very',   ipa:'/ˈveri/',        hint:'Lower lip lightly touches upper front teeth' }
+    ],
+    B1: [
+      { word:'would',      ipa:'/wʊd/',         hint:'Modal — schwa ending, the l is completely silent' },
+      { word:'clothes',    ipa:'/kləʊðz/',       hint:'Only one syllable — the e is silent' },
+      { word:'vegetable',  ipa:'/ˈvedʒtəbl/',    hint:'3 syllables only — not vege-ta-ble' },
+      { word:'asked',      ipa:'/ɑːskt/',        hint:'Past tense consonant cluster — skt at the end' },
+      { word:'months',     ipa:'/mʌnθs/',        hint:'Final consonant cluster — nths together' }
+    ]
+  },
+  business: {
+    B1: [
+      { word:'quarterly',  ipa:'/ˈkwɔːtəli/',     hint:'3 syllables — stress on the first' },
+      { word:'negotiate',  ipa:'/nɪˈɡəʊʃieɪt/',   hint:'4 syllables — stress on the 2nd' },
+      { word:'invoice',    ipa:'/ˈɪnvɔɪs/',        hint:'2 syllables — stress on the first, IN-voice' },
+      { word:'colleague',  ipa:'/ˈkɒliːɡ/',        hint:'2 syllables — stress on the first' },
+      { word:'agenda',     ipa:'/əˈdʒendə/',        hint:'3 syllables — stress on the 2nd' }
+    ],
+    C1: [
+      { word:'paradigm',       ipa:'/ˈpærədaɪm/',          hint:'3 syllables — the final m is silent' },
+      { word:'synergy',        ipa:'/ˈsɪnədʒi/',            hint:'3 syllables — soft g sound at the end' },
+      { word:'procurement',    ipa:'/prəˈkjʊərmənt/',       hint:'3 syllables — stress on the 2nd' },
+      { word:'liability',      ipa:'/ˌlaɪəˈbɪlɪti/',        hint:'5 syllables — stress on the 3rd' },
+      { word:'entrepreneurial',ipa:'/ˌɒntrəprəˈnɜːriəl/',  hint:'6 syllables — stress on the 4th' }
+    ]
+  }
+};
+
+const TIPS = {
+  ielts:    'IELTS rewards clear vowel sounds and natural sentence rhythm.',
+  cambridge:'Cambridge RP focuses on precise vowel length and non-rhotic endings.',
+  tesol:    'TESOL prioritises clarity — every consonant should be audible.',
+  business: 'Business English values confident pacing and strong word stress.'
+};
+
+function getLessons(fw, lv) {
+  const fwData = LESSONS[fw];
+  if (!fwData) return null;
+  if (fwData[lv]) return fwData[lv];
+  const order = ['A1','A2','B1','B2','C1','C2'];
+  const idx = order.indexOf(lv);
+  for (let i = idx; i >= 0; i--) if (fwData[order[i]]) return fwData[order[i]];
+  return fwData[Object.keys(fwData)[0]] || null;
+}
+
+/* ── STATE ──────────────────────────────────────────────── */
+const S = {
+  fw:'', lv:'', lessons:[], idx:0,
+  correct:0, attempts:0,
+  recording:false, activeRec:null,
+  srOK: !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+};
+
+/* ── REFS ───────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const scrOnboard = $('screen-onboard');
+const scrLesson  = $('screen-lesson');
+const btnBack    = $('btn-back');
+
+/* ── ONBOARDING LOGIC ───────────────────────────────────── */
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    S.fw = chip.dataset.fw;
+    checkReady();
+    /* update network palette */
+    window.NP_setPalette && window.NP_setPalette(S.fw);
+    window.NP_buildMeshes && window.NP_buildMeshes(
+      {ielts:0, cambridge:1, tesol:2, business:1}[S.fw] || 0
+    );
+  });
+});
+
+$('sel-level').addEventListener('change', e => { S.lv = e.target.value; checkReady(); });
+
+function checkReady() {
+  $('btn-start').disabled = !(S.fw && S.lv);
+}
+
+$('btn-start').addEventListener('click', () => {
+  const lessons = getLessons(S.fw, S.lv);
+  if (!lessons || !lessons.length) {
+    alert('No lessons available for this combination yet — try a different level.');
+    return;
+  }
+  S.lessons = lessons; S.idx = 0; S.correct = 0; S.attempts = 0;
+  $('meta-fw').textContent    = S.fw.toUpperCase();
+  $('meta-level').textContent = S.lv;
+  $('tip-text').textContent   = TIPS[S.fw] || TIPS.ielts;
+  showScreen('lesson');
+  window.NP_fireCenter && window.NP_fireCenter(0x7ee8fa);
+  setTimeout(loadLesson, 380);
+});
+
+/* ── SCREEN TRANSITIONS ─────────────────────────────────── */
+function showScreen(name) {
+  if (name === 'lesson') {
+    scrOnboard.classList.add('out');
+    scrLesson.classList.remove('out');
+    btnBack.style.display = 'block';
+  } else {
+    scrLesson.classList.add('out');
+    scrOnboard.classList.remove('out');
+    btnBack.style.display = 'none';
+  }
+}
+
+btnBack.addEventListener('click', () => {
+  stopSpeaking(); endRecording(false);
+  showScreen('onboard');
+});
+
+/* ── LESSON FLOW ────────────────────────────────────────── */
+function loadLesson() {
+  const lesson = S.lessons[S.idx];
+  if (!lesson) return;
+  const pct = Math.round((S.idx / S.lessons.length) * 100);
+  $('progress-fill').style.width = pct + '%';
+  $('progress-label').textContent = S.idx + ' / ' + S.lessons.length;
+  $('word-big').textContent  = lesson.word;
+  $('word-ipa').textContent  = lesson.ipa;
+  $('word-hint').textContent = lesson.hint;
+  hideFeedback();
+  setTutor('Listen first, then try saying: <span class="hl">' + lesson.word + '</span>');
+  window.NP_fireCenter && window.NP_fireCenter(0x7ee8fa);
+}
+
+function setTutor(html, animateRing) {
+  $('tutor-msg').innerHTML = html;
+  const ring = $('avatar-ring');
+  if (animateRing) { ring.classList.add('active'); setTimeout(() => ring.classList.remove('active'), 3000); }
+  else ring.classList.remove('active');
+}
+
+function showFeedback(type, msg) {
+  const el = $('feedback');
+  el.className = 'feedback show ' + type;
+  el.textContent = msg;
+}
+function hideFeedback() {
+  $('feedback').className = 'feedback';
+}
+
+/* ── SPEECH SYNTHESIS ───────────────────────────────────── */
+function speak(text, onDone) {
+  stopSpeaking();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'en-GB'; utt.rate = 0.82; utt.pitch = 1.05;
+  utt.onstart = () => {
+    $('avatar-ring').classList.add('active');
+    window.NP_fireCenter && window.NP_fireCenter(0x7ee8fa);
+  };
+  utt.onend = utt.onerror = () => {
+    $('avatar-ring').classList.remove('active');
+    if (onDone) onDone();
+  };
+  window.speechSynthesis.speak(utt);
+}
+function stopSpeaking() { window.speechSynthesis.cancel(); }
+
+/* ── SPEECH RECOGNITION ─────────────────────────────────── */
+function makeRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const r = new SR();
+  r.lang = 'en-GB'; r.continuous = false; r.interimResults = false;
+  let gotResult = false;
+
+  r.onresult = e => {
+    gotResult = true;
+    const heard = e.results[0][0].transcript.toLowerCase().trim();
+    handleHeard(heard);
+  };
+  r.onerror = e => {
+    if (e.error === 'not-allowed') {
+      setTutor('Microphone access was denied. Please allow mic access and try again.');
+      showFeedback('bad', 'Microphone blocked — check browser permissions.');
+    } else if (e.error === 'no-speech') {
+      setTutor('Nothing heard — please try again.');
+    }
+    endRecording(false);
+  };
+  r.onend = () => { if (!gotResult) endRecording(false); };
+  return r;
+}
+
+function startRecording() {
+  if (S.recording) return;
+  if (!S.srOK) {
+    setTutor('Speech recognition requires Chrome or Edge. Try typing the word instead.');
+    return;
+  }
+  S.activeRec = makeRecognition();
+  if (!S.activeRec) return;
+  S.recording = true;
+  const btn = $('btn-speak');
+  btn.className = 'btn recording';
+  btn.innerHTML = '<span class="rec-dot"></span> Listening…';
+  setTutor('Say the word clearly now…', false);
+  window.NP_fireCenter && window.NP_fireCenter(0xd8b4fe);
+  try { S.activeRec.start(); } catch(e) { endRecording(false); }
+}
+
+function endRecording(userCancelled) {
+  S.recording = false;
+  const btn = $('btn-speak');
+  btn.className = 'btn';
+  btn.innerHTML = '<span class="btn-icon">🎙️</span> Speak';
+  if (S.activeRec) { try { S.activeRec.stop(); } catch(e){} S.activeRec = null; }
+  if (userCancelled) {
+    const lesson = S.lessons[S.idx];
+    if (lesson) setTutor('Ready when you are — try saying: <span class="hl">' + lesson.word + '</span>');
+  }
+}
+
+/* ── SCORING ────────────────────────────────────────────── */
+function levenshtein(a, b) {
+  const m=a.length, n=b.length;
+  const dp = Array.from({length:m+1}, (_,i) => Array.from({length:n+1}, (_,j) => i===0?j:j===0?i:0));
+  for (let i=1;i<=m;i++) for (let j=1;j<=n;j++)
+    dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+  return dp[m][n];
+}
+function similarity(a, b) {
+  return 1 - levenshtein(a,b) / Math.max(a.length, b.length, 1);
+}
+
+function handleHeard(heard) {
+  endRecording(false);
+  const lesson = S.lessons[S.idx];
+  if (!lesson) return;
+  S.attempts++;
+  $('pill-attempts').textContent = S.attempts + ' attempt' + (S.attempts!==1?'s':'');
+
+  const target = lesson.word.toLowerCase();
+  const sim    = similarity(heard, target);
+  const exact  = heard === target || heard.includes(target);
+
+  if (exact || sim >= 0.85) {
+    S.correct++;
+    $('pill-correct').textContent = S.correct + ' correct';
+    showFeedback('ok', 'Excellent — ' + heard + ' is correct!');
+    setTutor('Perfect! <span class="hl">' + lesson.word + '</span> — well done.', true);
+    window.NP_fireCenter && window.NP_fireCenter(0x86efac);
+  } else if (sim >= 0.55) {
+    showFeedback('mid', 'Almost — I heard "' + heard + '". Focus on: ' + lesson.hint);
+    setTutor('Close! Tip: ' + lesson.hint, false);
+    window.NP_fireCenter && window.NP_fireCenter(0xfde68a);
+  } else {
+    showFeedback('bad', 'I heard "' + heard + '" — let the tutor say it again, then try once more.');
+    setTutor('Let me say it again…', true);
+    window.NP_fireCenter && window.NP_fireCenter(0xfca5a5);
+    setTimeout(() => speak(lesson.word), 600);
+  }
+}
+
+/* ── BUTTON EVENTS ──────────────────────────────────────── */
+$('btn-listen').addEventListener('click', () => {
+  const lesson = S.lessons[S.idx];
+  if (!lesson) return;
+  stopSpeaking();
+  setTutor('Listen carefully…', false);
+  speak(lesson.word, () => {
+    setTutor('Now you try — press Speak: <span class="hl">' + lesson.word + '</span>');
+  });
+});
+
+$('btn-speak').addEventListener('click', () => {
+  if (S.recording) { endRecording(true); return; }
+  startRecording();
+});
+
+$('btn-next').addEventListener('click', () => {
+  stopSpeaking(); endRecording(false);
+  S.idx++;
+  if (S.idx >= S.lessons.length) {
+    const pct = S.attempts > 0 ? Math.round((S.correct / S.attempts) * 100) : 0;
+    $('progress-fill').style.width = '100%';
+    $('progress-label').textContent = 'Done';
+    hideFeedback();
+    $('word-big').textContent  = pct + '%';
+    $('word-ipa').textContent  = '';
+    $('word-hint').textContent = S.correct + ' correct out of ' + S.attempts + ' attempts';
+    setTutor('Session complete! Great work. Press Back to start a new session.', true);
+    window.NP_fireCenter && window.NP_fireCenter(0x86efac);
+    setTimeout(() => window.NP_fireCenter && window.NP_fireCenter(0xd8b4fe), 700);
+  } else {
+    loadLesson();
+  }
+});
+</script>
+</body>
+</html>
